@@ -5,7 +5,6 @@ from scipy.cluster.hierarchy import dendrogram, linkage
 from matplotlib import pyplot as plt
 from scipy.cluster.hierarchy import fcluster
 from sklearn.metrics import silhouette_score
-from sklearn.decomposition import PCA
 
 datasets = pd.read_csv('/Users/kendergee/Desktop/vscode/online_retail/fake_customer_data.csv')
 datasets = datasets.dropna()
@@ -23,8 +22,6 @@ for column in ['Age','Gender', 'Education','Country','Mariage','Income']:
 sc = StandardScaler()
 datasets[datasets.columns] = sc.fit_transform(datasets[datasets.columns])
 
-pca = PCA(n_components=0.9)
-datasets = pca.fit_transform(datasets)
 linked = linkage(datasets, method='ward')
 
 plt.figure(figsize=(10, 7))
