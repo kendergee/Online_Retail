@@ -175,16 +175,16 @@ def LGBM(X_train,X_test,y_train,y_test):
     return LGBM_result
 
 # RF(X_train,X_test,y_train,y_test)
-XGB_result = XGBoost(X_train,X_test,y_train,y_test)
+# XGB_result = XGBoost(X_train,X_test,y_train,y_test)
 # GBR(X_train,X_test,y_train,y_test)
 LGBM_result = LGBM(X_train,X_test,y_train,y_test)
 
 results_dict = {
-    'Model': ['XGBoost', 'LightGBM'],
-    result_columns[0]: [XGB_result[0], LGBM_result[0]],
-    result_columns[1]: [XGB_result[1], LGBM_result[1]],
-    result_columns[2]: [XGB_result[2], LGBM_result[2]],
-    result_columns[3]: [XGB_result[3], LGBM_result[3]]
+    'Model': ['LightGBM'],
+    result_columns[0]: [LGBM_result[0]],
+    result_columns[1]: [LGBM_result[1]],
+    result_columns[2]: [LGBM_result[2]],
+    result_columns[3]: [LGBM_result[3]]
 }
 
 df_results = pd.DataFrame(results_dict)
