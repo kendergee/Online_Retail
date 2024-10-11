@@ -1,12 +1,17 @@
 import pandas as pd
-from sklearn.model_selection import train_test_split,GridSearchCV
+import numpy as np
+from sklearn.model_selection import train_test_split,cross_val_score
 from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import RandomForestRegressor,GradientBoostingRegressor
 from xgboost import XGBRegressor
-import xgboost as xgb
 from lightgbm import LGBMRegressor
 from sklearn.metrics import mean_squared_error,r2_score
 from category_encoders import OrdinalEncoder
+import joblib
+import matplotlib.pyplot as plt
+from statsmodels.graphics.tsaplots import plot_acf,plot_pacf
+import pymannkendall as mk
+
 
 data = pd.read_csv(r'E:\vscode\Online_Retail\online_retail_II.csv')
 data['InvoiceDate'] = pd.to_datetime(data['InvoiceDate'])
@@ -14,51 +19,78 @@ data['Year'] = data['InvoiceDate'].dt.year
 data['Quater'] =data['InvoiceDate'].dt.quarter
 data = data.drop(['Invoice','Description','InvoiceDate','Customer ID'],axis=1)
 
+# 視覺化：quarter變化與quantity的變化幅度
+# data.set_index('InvoiceDate', inplace=True)
+# data.resample('Q')['Quantity'].sum().plot(kind='line', title='Quarterly Quantity Trends')
+# plt.xlabel('Quarter')
+# plt.ylabel('Total Quantity')
+# plt.show()
+
+# acf, pacf檢定
+# print('start')
+# plot_acf(data['Quantity'])
+# plt.show()
+# plot_pacf(data['Quantity'])
+# plt.show()
+# print('end')
+
+# mannkendall檢定
+# sample_df = data[['InvoiceDate', 'Quantity']].sample(frac=0.05, random_state=42)
+# sample_df = sample_df.sort_values('InvoiceDate')
+# result = mk.original_test(sample_df['Quantity'])
+# print(result)
+
+# PCA分析
+# encoder = OrdinalEncoder()
+# X = data.drop(['Quantity'],axis=1)
+# X['StockCode'] = encoder.fit_transform(X['StockCode'].values.reshape(-1, 1))
+# X['Country'] = encoder.fit_transform(X['Country'].values.reshape(-1, 1))
+# sc = StandardScaler()
+# X_scaled = sc.fit_transform(X)
+# pca = PCA()
+# pca.fit(X_scaled)
+# # 計算累積解釋變異率
+# cumulative_variance = np.cumsum(pca.explained_variance_ratio_)
+# # 繪製 Elbow 曲線
+# plt.figure(figsize=(8, 5))
+# plt.plot(range(1, len(cumulative_variance) + 1), cumulative_variance, marker='o', linestyle='--')
+# plt.xlabel('Number of Principal Components')
+# plt.ylabel('Cumulative Explained Variance')
+# plt.title('Elbow Method for PCA')
+# plt.grid(True)
+# plt.show()
+
 X = data.drop('Quantity',axis=1)
-y =data['Quantity']
-X_train, X_test,y_train,y_test = train_test_split(X,y,test_size=0.2,random_state=42)
+y = data['Quantity']
+encoder = OrdinalEncoder()
+X['StockCode'] = encoder.fit_transform(X['StockCode'].values.reshape(-1, 1))
+X['Country'] = encoder.fit_transform(X['Country'].values.reshape(-1, 1))
+# 分割資料集
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-encoder1 = OrdinalEncoder()
-X_train['StockCode'] = encoder1.fit_transform(X_train['StockCode'])
-X_test['StockCode'] = encoder1.transform(X_test['StockCode'])
-encoder2 = OrdinalEncoder()
-X_train['Country'] = encoder2.fit_transform(X_train['Country'])
-X_test['Country'] = encoder2.transform(X_test['Country'])
-
+# 標準化數據
 stdX = StandardScaler()
 X_train = stdX.fit_transform(X_train)
 X_test = stdX.transform(X_test)
 
+# 標準化目標變數
 stdy = StandardScaler()
-y_train = stdy.fit_transform(y_train.values.reshape(-1, 1))
-y_test = stdy.transform(y_test.values.reshape(-1, 1))
+y_train = stdy.fit_transform(y_train.values.reshape(-1, 1)).ravel()
+y_test = stdy.transform(y_test.values.reshape(-1, 1)).ravel()
 
-y_train = y_train.ravel()
-y_test = y_test.ravel()
-
-result_columns = ['Best Params','Best CV score','Test MSE','Test R2']
+result_columns = ['Params','mean CV MSE','CV std','Test MSE','Test R2']
 print('資料前處理完成')
 
 def RF(X_train,X_test,y_train,y_test):
     print('RF開始')
     RF = RandomForestRegressor()
-    param_grid ={
-        'n_estimators':[50,100,200],
-        'max_depth':[None,10,20,30],
-        'min_samples_split':[2,5,10],
-        'min_samples_leaf':[1,2,4],
-        'max_features':['sqrt','log2']
-    }
-    grid_search = GridSearchCV(estimator=RF,param_grid=param_grid,cv=5,scoring='neg_mean_squared_error',n_jobs = -1)
-    grid_search.fit(X_train,y_train)
-    print('RandomForesRegressor')
-    print("Best Parameters:", grid_search.best_params_)
-    print("Best Score (Negative MSE):", grid_search.best_score_)
-    print('   ')
-
-    best_model = grid_search.best_estimator_
-    y_pred = best_model.predict(X_test)
-    y_pred = stdy.inverse_transform(y_pred.reshape(-1, 1))  # 將預測結果轉換回原尺度
+    cv_scores = cross_val_score(RF,X_train,y_train,cv=5,scoring='neg_mean_squared_error')
+    mean_cv_mse = -np.mean(cv_scores)
+    std_cv = np.std(cv_scores)
+    print(f'Mean CV MSE: {mean_cv_mse}')
+    print(f'Std CV: {std_cv}')
+    RF.fit(X_train,y_train)
+    y_pred = RF.predict(X_test)
 
     # 計算 MSE
     mse = mean_squared_error(y_test, y_pred)
@@ -67,31 +99,20 @@ def RF(X_train,X_test,y_train,y_test):
     print(f"Test r2: {r2}")
     print('RF結束')
 
+    RF_result = [RF.get_params(),mean_cv_mse,std_cv,mse,r2]
+
+    return RF_result
+
 def XGBoost(X_train,X_test,y_train,y_test):
     print('XGB開始')
     XGB = XGBRegressor()
-    param_grid = {
-    'n_estimators': [50, 100, 200],        # 樹的數量
-    'learning_rate': [0.01, 0.1, 0.2],     # 學習率（步長）
-    'max_depth': [3, 5, 7],                # 樹的最大深度
-    'subsample': [0.6, 0.8, 1.0],          # 每棵樹樣本的取樣比例
-    'colsample_bytree': [0.6, 0.8, 1.0],   # 每棵樹使用特徵的取樣比例
-    'gamma': [0, 0.1, 0.2],                # 損失函數最小化所需的劃分點減益
-    'reg_alpha': [0, 0.01, 0.1],           # L1 正則化項的權重（防止過擬合）
-    'reg_lambda': [1, 0.1, 0.5],            # L2 正則化項的權重（防止過擬合）
-    'device':['cuda'],
-    'tree_method':['hist']
-    }
-    grid_search = GridSearchCV(estimator= XGB,param_grid=param_grid,cv=5,scoring='neg_mean_squared_error',n_jobs = -1)
-    grid_search.fit(X_train,y_train)
-    print('XGBoost')
-    print("Best Parameters:", grid_search.best_params_)
-    print("Best Score (Negative MSE):", grid_search.best_score_)
-    print('   ')
-
-    best_model = grid_search.best_estimator_
-    y_pred = best_model.predict(X_test)
-    y_pred = stdy.inverse_transform(y_pred.reshape(-1, 1))  # 將預測結果轉換回原尺度
+    cv_scores = cross_val_score(XGB,X_train,y_train,cv=5,scoring='neg_mean_squared_error')
+    mean_cv_mse = -np.mean(cv_scores)
+    std_cv = np.std(cv_scores)
+    print(f'Mean CV MSE: {mean_cv_mse}')
+    print(f'Std CV: {std_cv}')
+    XGB.fit(X_train,y_train)
+    y_pred = XGB.predict(X_test)
 
     # 計算 MSE
     mse = mean_squared_error(y_test, y_pred)
@@ -100,7 +121,7 @@ def XGBoost(X_train,X_test,y_train,y_test):
     print(f"Test r2: {r2}")
     print('XGB結束')
 
-    XGB_result = [grid_search.best_estimator_,grid_search.best_score_,mse,r2]
+    XGB_result = [XGB.get_params(),mean_cv_mse,std_cv,mse,r2]
 
     return XGB_result
 
@@ -108,26 +129,13 @@ def XGBoost(X_train,X_test,y_train,y_test):
 def GBR(X_train,X_test,y_train,y_test):
     print('GBR開始')
     GBR = GradientBoostingRegressor()
-    param_grid = {
-    'n_estimators': [50, 100, 200],        # 樹的數量
-    'learning_rate': [0.01, 0.05, 0.1],    # 學習率，控制每棵樹對結果的影響
-    'max_depth': [3, 5, 7],                # 每棵樹的最大深度，控制模型複雜度
-    'min_samples_split': [2, 5, 10],       # 分裂節點所需的最小樣本數
-    'min_samples_leaf': [1, 2, 4],         # 每個葉子節點的最小樣本數
-    'subsample': [0.6, 0.8, 1.0],          # 每棵樹樣本的取樣比例
-    'max_features': ['sqrt', 'log2']  # 每次分裂時考慮的最大特徵數
-    }
-
-    grid_search = GridSearchCV(estimator= GBR,param_grid=param_grid,cv=5,scoring='neg_mean_squared_error',n_jobs = -1)
-    grid_search.fit(X_train,y_train)
-    print('GradientBoostRegressor')
-    print("Best Parameters:", grid_search.best_params_)
-    print("Best Score (Negative MSE):", grid_search.best_score_)
-    print('   ')
-
-    best_model = grid_search.best_estimator_
-    y_pred = best_model.predict(X_test)
-    y_pred = stdy.inverse_transform(y_pred.reshape(-1, 1))  # 將預測結果轉換回原尺度
+    cv_scores = cross_val_score(GBR,X_train,y_train,cv=5,scoring='neg_mean_squared_error')
+    mean_cv_mse = -np.mean(cv_scores)
+    std_cv = np.std(cv_scores)
+    print(f'Mean CV MSE: {mean_cv_mse}')
+    print(f'Std CV: {std_cv}')
+    GBR.fit(X_train,y_train)
+    y_pred = GBR.predict(X_test)
 
     # 計算 MSE
     mse = mean_squared_error(y_test, y_pred)
@@ -136,32 +144,20 @@ def GBR(X_train,X_test,y_train,y_test):
     print(f"Test r2: {r2}")
     print('GBR結束')
 
+    GBR_result = [GBR.get_params(),mean_cv_mse,std_cv,mse,r2]
+
+    return GBR_result
+
 def LGBM(X_train,X_test,y_train,y_test):
     print('LGBM開始')
     LGBM = LGBMRegressor()
-    param_grid = {
-    'n_estimators': [50, 100, 200],        # 樹的數量
-    'learning_rate': [0.01, 0.05, 0.1],    # 學習率，控制每棵樹對結果的影響
-    'max_depth': [3, 5, 7, -1],            # 每棵樹的最大深度，-1 表示不設置深度限制
-    'num_leaves': [20, 31, 40],            # 每棵樹的葉子節點數量，控制模型複雜度
-    'min_child_samples': [5, 10, 20],      # 每個葉子節點的最小樣本數，防止過擬合
-    'subsample': [0.6, 0.8, 1.0],          # 每棵樹樣本的取樣比例
-    'colsample_bytree': [0.6, 0.8, 1.0],   # 每棵樹使用特徵的取樣比例
-    'reg_alpha': [0, 0.01, 0.1],           # L1 正則化項的權重（防止過擬合）
-    'reg_lambda': [0, 0.01, 0.1],           # L2 正則化項的權重（防止過擬合）
-    'device':['gpu']
-    }
-
-    grid_search = GridSearchCV(estimator= LGBM,param_grid=param_grid,cv=5,scoring='neg_mean_squared_error',n_jobs = -1)
-    grid_search.fit(X_train,y_train)
-    print('LightGradientBoostRegressor')
-    print("Best Parameters:", grid_search.best_params_)
-    print("Best Score (Negative MSE):", grid_search.best_score_)
-    print('    ')
-
-    best_model = grid_search.best_estimator_
-    y_pred = best_model.predict(X_test)
-    y_pred = stdy.inverse_transform(y_pred.reshape(-1, 1))  # 將預測結果轉換回原尺度
+    cv_scores = cross_val_score(LGBM,X_train,y_train,cv=5,scoring='neg_mean_squared_error')
+    mean_cv_mse = -np.mean(cv_scores)
+    std_cv = np.std(cv_scores)
+    print(f'Mean CV MSE: {mean_cv_mse}')
+    print(f'Std CV: {std_cv}')
+    LGBM.fit(X_train,y_train)
+    y_pred = LGBM.predict(X_test)
 
     # 計算 MSE
     mse = mean_squared_error(y_test, y_pred)
@@ -170,21 +166,22 @@ def LGBM(X_train,X_test,y_train,y_test):
     print(f"Test r2: {r2}")
     print('LGBM結束')
 
-    LGBM_result = [grid_search.best_estimator_,grid_search.best_score_,mse,r2]
+    LGBM_result = [LGBM.get_params(),mean_cv_mse,std_cv,mse,r2]
 
     return LGBM_result
 
-# RF(X_train,X_test,y_train,y_test)
-# XGB_result = XGBoost(X_train,X_test,y_train,y_test)
-# GBR(X_train,X_test,y_train,y_test)
+RF_result = RF(X_train,X_test,y_train,y_test)
+XGB_result = XGBoost(X_train,X_test,y_train,y_test)
+GBR_result = GBR(X_train,X_test,y_train,y_test)
 LGBM_result = LGBM(X_train,X_test,y_train,y_test)
 
 results_dict = {
-    'Model': ['LightGBM'],
-    result_columns[0]: [LGBM_result[0]],
-    result_columns[1]: [LGBM_result[1]],
-    result_columns[2]: [LGBM_result[2]],
-    result_columns[3]: [LGBM_result[3]]
+    'Model': ['RF','XGB','GBR','LightGBM'],
+    result_columns[0]: [RF_result[0],XGB_result[0],GBR_result[0],LGBM_result[0]],
+    result_columns[1]: [RF_result[1],XGB_result[1],GBR_result[1],LGBM_result[1]],
+    result_columns[2]: [RF_result[2],XGB_result[2],GBR_result[2],LGBM_result[2]],
+    result_columns[3]: [RF_result[3],XGB_result[3],GBR_result[3],LGBM_result[3]],
+    result_columns[4]: [RF_result[4],XGB_result[4],GBR_result[4],LGBM_result[4]],
 }
 
 df_results = pd.DataFrame(results_dict)
