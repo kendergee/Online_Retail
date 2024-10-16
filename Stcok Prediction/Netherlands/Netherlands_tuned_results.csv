@@ -1,0 +1,2 @@
+Model,Best Params,MSE,R²
+LGBM,"{'subsample': 1.0, 'reg_lambda': 1, 'reg_alpha': 0, 'num_leaves': 31, 'n_estimators': 100, 'max_depth': 7, 'learning_rate': 0.05, 'colsample_bytree': 0.8}",0.6166166086690038,0.22099405028658048

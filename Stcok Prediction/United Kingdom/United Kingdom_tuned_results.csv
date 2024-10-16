@@ -1,0 +1,2 @@
+Model,Best Params,MSE,R²
+RF,"{'n_estimators': 100, 'min_samples_split': 5, 'min_samples_leaf': 1, 'max_depth': 20, 'bootstrap': True}",0.21413289620419115,-0.22492496059626643

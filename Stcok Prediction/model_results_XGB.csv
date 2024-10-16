@@ -1,0 +1,2 @@
+best param,best cv score,Test mse,Test R2
+"{'max_depth': 13, 'learning_rate': 0.036464495805559584, 'subsample': 0.9000000000000001, 'colsample_bytree': 0.7, 'reg_alpha': 0.5, 'reg_lambda': 1, 'min_child_weight': 1, 'gamma': 7.0, 'scale_pos_weight': 8.1}",0.509831521159916,0.32053478234019345,0.713661955746864

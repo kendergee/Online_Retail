@@ -1,0 +1,2 @@
+Model,Best Params,MSE,R²
+XGBoost,"{'subsample': 1.0, 'reg_lambda': 1.5, 'reg_alpha': 0.1, 'n_estimators': 100, 'max_depth': 7, 'learning_rate': 0.1, 'colsample_bytree': 0.8}",0.8276581868094179,0.3683238328626123
